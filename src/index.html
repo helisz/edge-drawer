@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edge Drawer</title>
+<style>
+  :root{
+    --ink:#e8eaed; --sub:#9aa0a6; --line:rgba(255,255,255,.10);
+    --bg:rgba(28,30,34,.86); --bg2:rgba(255,255,255,.06); --accent:#4d8dff;
+    --radius:16px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-user-select:none; user-select:none;}
+  html,body{height:100%; overflow:hidden; background:transparent;
+    font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; color:var(--ink);}
+  /* 外壳：整个窗口就是抽屉，右/左侧有一条把手 */
+  .shell{height:100%; display:flex; align-items:center; padding:8px;}
+  .shell.edge-left{flex-direction:row;}
+  .shell.edge-right{flex-direction:row-reverse;}
+
+  .handle{width:26px; align-self:stretch; display:flex; align-items:center; justify-content:center;
+    background:var(--bg); border:1px solid var(--line); border-radius:14px; cursor:grab; flex:0 0 26px;}
+  .handle:active{cursor:grabbing;}
+  .handle .grip{display:flex; flex-direction:column; gap:4px;}
+  .handle .grip i{width:4px; height:4px; border-radius:50%; background:var(--sub);}
+
+  .panel{flex:1; min-width:0; height:100%; margin:0 8px; background:var(--bg);
+    backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+    border:1px solid var(--line); border-radius:var(--radius); display:flex; flex-direction:column; overflow:hidden;
+    box-shadow:0 12px 40px rgba(0,0,0,.4);
+    transform:translateX(0); transition:transform .28s cubic-bezier(.22,.9,.3,1), opacity .2s;
+  }
+  .panel.hidden-anim{opacity:0;}
+  .panel.hidden-anim.edge-left{transform:translateX(-105%);}
+  .panel.hidden-anim.edge-right{transform:translateX(105%);}
+
+  .head{padding:14px 16px 10px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px;}
+  .head h1{font-size:14px; font-weight:600; letter-spacing:.2px;}
+  .head .cnt{font-size:11px; color:var(--sub); background:var(--bg2); padding:1px 7px; border-radius:10px;}
+  .head .spacer{flex:1;}
+  .iconbtn{width:28px; height:28px; border-radius:8px; border:none; background:var(--bg2); color:var(--sub);
+    cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px;}
+  .iconbtn:hover{background:rgba(255,255,255,.14); color:var(--ink);}
+
+  .body{flex:1; overflow-y:auto; padding:12px;}
+  .body::-webkit-scrollbar{width:8px;}
+  .body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14); border-radius:4px;}
+
+  .dropzone{border:1.5px dashed var(--line); border-radius:12px; padding:18px 12px; text-align:center;
+    color:var(--sub); font-size:12.5px; margin-bottom:12px; transition:.15s;}
+  .dropzone.over{border-color:var(--accent); color:var(--accent); background:rgba(77,141,255,.08);}
+  .dropzone b{color:var(--ink);}
+
+  .grid{display:grid; grid-template-columns:1fr; gap:8px;}
+  .file{display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:10px;
+    background:var(--bg2); cursor:pointer; transition:.12s;}
+  .file:hover{background:rgba(255,255,255,.13);}
+  .file .ico{width:30px; height:30px; border-radius:7px; flex:0 0 30px; display:flex; align-items:center; justify-content:center;
+    font-size:15px; background:rgba(77,141,255,.16);}
+  .file .meta{min-width:0; flex:1;}
+  .file .name{font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .file .sub{font-size:10.5px; color:var(--sub); margin-top:1px;}
+  .file .del{opacity:0; width:24px; height:24px; border-radius:6px; border:none; background:transparent; color:var(--sub);
+    cursor:pointer; font-size:13px;}
+  .file:hover .del{opacity:1;}
+  .file .del:hover{background:rgba(255,80,80,.2); color:#ff6b6b;}
+
+  .empty{text-align:center; color:var(--sub); font-size:12.5px; padding:30px 10px; line-height:1.8;}
+
+  /* 设置面板 */
+  .settings{display:none; flex-direction:column; gap:14px; padding:14px 16px;}
+  .settings.show{display:flex;}
+  .row{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12.5px;}
+  .row label{color:var(--sub);}
+  .seg{display:flex; background:var(--bg2); border-radius:9px; padding:2px;}
+  .seg button{border:none; background:transparent; color:var(--sub); padding:5px 12px; border-radius:7px; cursor:pointer; font-size:12px;}
+  .seg button.on{background:var(--accent); color:#fff;}
+  .pathbox{background:var(--bg2); border-radius:9px; padding:8px 10px; font-size:11px; color:var(--sub);
+    word-break:break-all; line-height:1.5; max-height:70px; overflow-y:auto;}
+  .btn{border:none; background:var(--accent); color:#fff; padding:9px; border-radius:9px; cursor:pointer; font-size:12.5px; font-weight:500;}
+  .btn.ghost{background:var(--bg2); color:var(--ink);}
+  .view{display:flex; flex-direction:column; height:100%;}
+</style>
+</head>
+<body>
+<div class="shell edge-right" id="shell">
+  <div class="handle" id="handle" title="Edge Drawer"><div class="grip"><i></i><i></i><i></i><i></i><i></i></div></div>
+  <div class="panel edge-right" id="panel">
+    <div class="head">
+      <h1 id="title">收纳抽屉</h1>
+      <span class="cnt" id="cnt">0</span>
+      <span class="spacer"></span>
+      <button class="iconbtn" id="settingsBtn" title="设置">⚙</button>
+      <button class="iconbtn" id="closeBtn" title="收起">✕</button>
+    </div>
+
+    <div class="body" id="listView">
+      <div class="dropzone" id="dropzone">把文件拖到这里 · 或拖入抽屉窗口<br><b>存入收纳目录</b></div>
+      <div class="grid" id="grid"></div>
+      <div class="empty" id="empty" style="display:none">还没有文件<br>从桌面把文件拖进来吧</div>
+    </div>
+
+    <div class="settings" id="settingsView">
+      <div class="row">
+        <label>抽屉位置</label>
+        <div class="seg" id="edgeSeg">
+          <button data-edge="left">左</button>
+          <button data-edge="right">右</button>
+        </div>
+      </div>
+      <div class="row" style="flex-direction:column; align-items:stretch; gap:6px;">
+        <label>收纳目录</label>
+        <div class="pathbox" id="storeDir">—</div>
+      </div>
+      <button class="btn ghost" id="openDirBtn">打开收纳目录</button>
+      <div class="row" style="color:var(--sub); font-size:11px; line-height:1.6; display:block;">
+        触发方式：鼠标在屏幕该侧边缘 20px 内向内拖 ≥40px 拉出抽屉。拖动中不悬停自动弹出。
+      </div>
+      <button class="btn" id="backBtn">返回</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let state = { edge:'right', storeDir:'', files:[] };
+
+const ICONS = { pdf:'📄', png:'🖼', jpg:'🖼', jpeg:'🖼', gif:'🖼', mp4:'🎬', mov:'🎬',
+  mp3:'🎵', wav:'🎵', zip:'📦', txt:'📝', md:'📝', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊', ppt:'📊', pptx:'📊' };
+function iconFor(name){
+  const ext = (name.split('.').pop()||'').toLowerCase();
+  return ICONS[ext] || '📎';
+}
+function fmtSize(b){
+  if(b < 1024) return b+' B';
+  if(b < 1048576) return (b/1024).toFixed(0)+' KB';
+  return (b/1048576).toFixed(1)+' MB';
+}
+
+function applyEdge(edge){
+  state.edge = edge;
+  $('#shell').className = 'shell edge-' + edge;
+  $('#panel').className = 'panel edge-' + edge;
+  document.querySelectorAll('#edgeSeg button').forEach(b => b.classList.toggle('on', b.dataset.edge===edge));
+}
+
+function render(){
+  applyEdge(state.edge);
+  $('#storeDir').textContent = state.storeDir;
+  $('#cnt').textContent = state.files.length;
+  const grid = $('#grid'); grid.innerHTML = '';
+  $('#empty').style.display = state.files.length ? 'none' : 'block';
+  state.files.forEach(f => {
+    const el = document.createElement('div'); el.className = 'file';
+    el.innerHTML = `<div class="ico">${iconFor(f.name)}</div>
+      <div class="meta"><div class="name" title="${f.name}">${f.name}</div>
+      <div class="sub">${fmtSize(f.size)}</div></div>
+      <button class="del" title="删除">🗑</button>`;
+    el.addEventListener('click', (e) => {
+      if(e.target.classList.contains('del')) return;
+      window.api.openFile(f.path);
+    });
+    el.querySelector('.del').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const r = await window.api.deleteFile(f.path);
+      if(r.ok){ state.files = r.files; render(); }
+    });
+    grid.appendChild(el);
+  });
+}
+
+async function refresh(){
+  const cfg = await window.api.getConfig();
+  state.edge = cfg.edge; state.storeDir = cfg.storeDir; state.files = cfg.files;
+  render();
+}
+
+// 拖拽文件入抽屉
+const dz = $('#dropzone');
+let dragDepth = 0;
+function isFileDrag(e){ return e.dataTransfer && [...e.dataTransfer.types].includes('Files'); }
+window.addEventListener('dragenter', (e) => {
+  e.preventDefault();
+  if(!isFileDrag(e)) return;
+  dragDepth++;
+  dz.classList.add('over');
+  window.api.dragEnter(); // 让主进程确保抽屉已开
+});
+window.addEventListener('dragover', (e) => { e.preventDefault(); if(isFileDrag(e)) e.dataTransfer.dropEffect='copy'; });
+window.addEventListener('dragleave', (e) => {
+  e.preventDefault(); dragDepth = Math.max(0, dragDepth-1);
+  if(dragDepth===0) dz.classList.remove('over');
+});
+window.addEventListener('drop', async (e) => {
+  e.preventDefault(); dragDepth = 0; dz.classList.remove('over');
+  if(!isFileDrag(e)) return;
+  const files = [...e.dataTransfer.files];
+  for(const f of files){
+    // Electron 里 f.path 是真实路径
+    const p = f.path;
+    if(!p) continue;
+    const r = await window.api.copyFile(p);
+    if(r.ok) state.files = r.files;
+  }
+  render();
+});
+
+// 按钮
+$('#closeBtn').addEventListener('click', () => window.api.closeDrawer());
+$('#settingsBtn').addEventListener('click', () => {
+  $('#listView').style.display='none';
+  $('#settingsView').classList.add('show');
+  $('#title').textContent = '设置';
+});
+$('#backBtn').addEventListener('click', () => {
+  $('#settingsView').classList.remove('show');
+  $('#listView').style.display='block';
+  $('#title').textContent = '收纳抽屉';
+});
+$('#openDirBtn').addEventListener('click', () => window.api.openStoreDir());
+document.querySelectorAll('#edgeSeg button').forEach(b => {
+  b.addEventListener('click', async () => {
+    const cfg = await window.api.saveConfig({ edge: b.dataset.edge });
+    state.edge = cfg.edge; applyEdge(cfg.edge);
+  });
+});
+
+window.api.onState((s) => {
+  const panel = $('#panel');
+  if(s === 'open'){
+    panel.classList.remove('hidden-anim');
+  } else {
+    panel.classList.add('hidden-anim');
+    // 收起后回到列表视图
+    $('#settingsView').classList.remove('show');
+    $('#listView').style.display='block';
+    $('#title').textContent='收纳抽屉';
+  }
+});
+
+refresh();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "edge-drawer",
+  "version": "0.1.0",
+  "description": "贴屏幕边缘拖动触发滑出的抽屉，收纳文件到指定目录 (Electron)",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  },
+  "dependencies": {
+    "uiohook-napi": "^1.5.4"
+  }
+}
